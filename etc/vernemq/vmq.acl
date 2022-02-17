@@ -1,4 +1,3 @@
 # Anonymous ACL
 
-#pattern read client/username/status
 #pattern write client/username/status
