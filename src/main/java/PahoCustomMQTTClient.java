@@ -13,14 +13,30 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
     private static final String brokerUrl = "ws://127.0.0.1:8888";
     private static final String statusTopic = "client/" + clientId + "/status";
 
-    private static final int TIMEOUT_SECONDS = 3;
+    private static final int TIMEOUT_SECONDS = 10;
 
-    private static ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(4);
-    private static MemoryPersistence memoryPersistence = new MemoryPersistence();
+    private static ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(5);
+
 
     public static void main(String[] args) throws MqttException, InterruptedException {
-        Thread.sleep(10000);
         final PahoCustomMQTTClient client = new PahoCustomMQTTClient();
+//        Thread.sleep(10000);
+//        System.out.println("Stopping client");
+//        client.stopClient();
+
+//        Thread.sleep(3000);
+//        final PahoCustomMQTTClient client2 = new PahoCustomMQTTClient();
+//        Thread.sleep(10000);
+//        System.out.println("Stopping client2");
+//        client2.stopClient();
+//
+//        Thread.sleep(3000);
+//        final PahoCustomMQTTClient client3 = new PahoCustomMQTTClient();
+//        Thread.sleep(10000);
+//        System.out.println("Stopping client3");
+//        client3.stopClient();
+//
+//        Thread.sleep(50000);
 
 //        System.out.println("Client WSAITGAs");
 //        Thread.sleep(20000);
@@ -45,19 +61,56 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
     @Override
     public void connectComplete(boolean reconnect, String serverURI) {
         System.out.println("Connection complete");
+//        connectCompleteLogic();
         try {
             System.out.println("Publishing status to " + statusTopic);
             mqttClient.publish(statusTopic, "UP".getBytes(), 1, true);
             System.out.println("Status published");
         } catch (MqttException e) {
             System.out.println("Failed to publish status topic, retrying in 10 seconds (Auto Reconnect?)");
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException interruptedException) {
+                interruptedException.printStackTrace();
+            }
+
         }
+    }
+
+    private void connectCompleteLogic() {
+        final Runnable runnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    System.out.println("Publishing status to " + statusTopic);
+                    mqttClient.publish(statusTopic, "UP".getBytes(), 1, true);
+                    System.out.println("Status published");
+                } catch (MqttException e) {
+                    System.out.println("Failed to publish status topic, retrying in 10 seconds (Auto Reconnect?)");
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException interruptedException) {
+                        interruptedException.printStackTrace();
+                    }
+
+                }
+            }
+        };
+        new Thread(runnable).start();
     }
 
 
     @Override
     public void connectionLost(Throwable cause) {
         System.out.println("Connection lost");
+        try {
+            Thread.sleep(500);
+            System.out.println("RECONNECTING");
+            mqttClient.reconnect();
+        } catch (Exception e) {
+            System.out.println("FAILED TO RECONNECT");
+            e.printStackTrace();
+        }
     }
 
 
@@ -75,8 +128,8 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
 
         final MqttConnectOptions mqttConnectionOptions = new MqttConnectOptions();
         mqttConnectionOptions.setCleanSession(true);
-        mqttConnectionOptions.setAutomaticReconnect(true);
-        mqttConnectionOptions.setMaxReconnectDelay(10 * 1000);
+        mqttConnectionOptions.setAutomaticReconnect(false);
+//        mqttConnectionOptions.setMaxReconnectDelay(10 * 1000);
         mqttConnectionOptions.setUserName(clientId);
         mqttConnectionOptions.setConnectionTimeout(TIMEOUT_SECONDS);
 
@@ -124,8 +177,7 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
 
     private void instantiateClient() throws MqttException {
         scheduledExecutorService = Executors.newScheduledThreadPool(4);
-        memoryPersistence = new MemoryPersistence();
-        mqttClient = new MqttClient(brokerUrl, clientId, memoryPersistence, scheduledExecutorService);
+        mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence(), scheduledExecutorService);
         mqttClient.setCallback(this);
         mqttClient.setTimeToWait((TIMEOUT_SECONDS + 1) * 1000);
     }
@@ -141,16 +193,6 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
             System.out.println("Failed to close client");
             e.printStackTrace();
         }
-
-        try {
-            memoryPersistence.clear();
-            memoryPersistence.close();
-        } catch (MqttPersistenceException e) {
-            System.out.println("Failed to clear MemoryPersistence");
-            e.printStackTrace();
-
-        }
-        memoryPersistence = null;
 
         System.out.println("Stopping executor service");
         scheduledExecutorService.shutdown();
