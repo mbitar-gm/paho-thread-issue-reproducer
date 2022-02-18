@@ -11,17 +11,14 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
 
     private static final int TIMEOUT_SECONDS = 10;
 
-    private static ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(5);
+    private static final ScheduledExecutorService scheduledExecutorService = Executors.newScheduledThreadPool(4);
 
-    private final ExecutorService onConnectCompleteExecutor = Executors.newSingleThreadExecutor();
-    private final Semaphore onConnectCompleteLock = new Semaphore(1);
 
     public static void main(String[] args) throws MqttException {
         new PahoCustomMQTTClient();
     }
 
     public PahoCustomMQTTClient() throws MqttException {
-        scheduledExecutorService = Executors.newScheduledThreadPool(4);
         mqttClient = new MqttClient(brokerUrl, clientId, new MemoryPersistence(), scheduledExecutorService);
         mqttClient.setCallback(this);
         mqttClient.setTimeToWait((TIMEOUT_SECONDS + 1) * 1000);
@@ -39,16 +36,7 @@ public class PahoCustomMQTTClient implements MqttCallbackExtended {
     }
 
     private void subscribePublishInBackground() {
-
-        final int locksAcquired = onConnectCompleteLock.drainPermits();
-        if (locksAcquired > 0) {
-            System.out.println("Submitting on connect complete");
-
-            onConnectCompleteExecutor.submit(new ConnectCompletePublish(mqttClient, onConnectCompleteLock));
-
-        } else {
-            System.out.println("On connect complete already in progress");
-        }
+        new ConnectCompletePublish(mqttClient);
     }
 
 
